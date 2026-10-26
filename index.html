@@ -80,6 +80,12 @@ function detect(text){
  // 短い氏名やひらがなの名は誤検出しやすいため、氏名を示す明示的な文脈がある場合に限って補助検出する。
  const contextNameRe=new RegExp("(?:担当者(?:は|：|:)|氏名(?:は|：|:)|名前(?:は|：|:)|本人(?:は|：|:)|社員(?:は|：|:)|宛名(?:は|：|:))\\s*("+surnames.join("|")+")([一-龯々ぁ-ん]{1,5}?)(?=です|でした|さん|様|君|氏|に|と|、|。|$|\\s)","g");
  while((m=contextNameRe.exec(text))!==null){const value=m[1]+m[2],start=m.index+m[0].lastIndexOf(value);if(value.length>=2&&value.length<=7)add("PERSON",value,start,start+value.length);if(!m[0].length)contextNameRe.lastIndex++;}
+ // 「佐藤さん」「山田様」など、敬称付きの姓は名前として検出する。敬称は残し、姓だけを置換する。
+ const honorificSurnameRe=new RegExp("(?<![一-龯々])("+surnames.join("|")+")(?=(?:さん|様|氏|君))(?![一-龯々])","g");
+ while((m=honorificSurnameRe.exec(text))!==null){add("PERSON",m[1],m.index,m.index+m[1].length);if(!m[0].length)honorificSurnameRe.lastIndex++;}
+ // メールの宛先などで「山田、佐藤、私宛」のように敬称なしで列挙された姓も検出する。
+ const listedSurnameRe=new RegExp("(?<![一-龯々])("+surnames.join("|")+")(?=(?:、|，|,|・|宛に|宛先|にメール|へメール|に説明|に確認))(?![一-龯々])","g");
+ while((m=listedSurnameRe.exec(text))!==null){add("PERSON",m[1],m.index,m.index+m[1].length);if(!m[0].length)listedSurnameRe.lastIndex++;}
  // 会社名は接頭辞・接尾辞の境界を意識し、文の前後を巻き込みにくいパターンにする。
  regexFind("ORG",/(?<![一-龯々ァ-ヶA-Za-z0-9・ー])[一-龯々ァ-ヶA-Za-z0-9・ー]{2,16}(?:株式会社|有限会社|合同会社|大学|病院|銀行)/g,text);
  regexFind("ORG",/(?:株式会社|有限会社|合同会社)(?!に|は|が|を|と|で|の)[一-龯々ぁ-んァ-ヶA-Za-z0-9・ー]{2,16}?(?=です|でした|は|が|を|に|と|、|。|$|\s)/g,text);
