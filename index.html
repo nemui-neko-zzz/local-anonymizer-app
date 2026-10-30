@@ -11,7 +11,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
-<title>ローカル匿名化ツール v6（iPhone対応検証版）</title>
+<title>ローカル匿名化ツール v7（iPhone対応検証版）</title>
 <style>
 :root{color-scheme:light dark;--bg:#f3f5f7;--panel:#fff;--ink:#17212b;--muted:#5c6875;--line:#d4dce4;--accent:#2459a9;--warn:#fff1cc}
 @media(prefers-color-scheme:dark){:root{--bg:#11161c;--panel:#1b232c;--ink:#edf2f7;--muted:#abb7c4;--line:#384452;--accent:#8bb7ff;--warn:#44381e}}
@@ -60,23 +60,36 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const typeNames={PERSON:"氏名",EMAIL:"メールアドレス",PHONE:"電話番号",ORG:"会社・組織",ADDRESS:"住所",PROJECT:"案件",OTHER:"その他",URL:"URL認証情報",POSTAL:"郵便番号"};
+const typeNames={PERSON:"氏名",EMAIL:"メールアドレス",PHONE:"電話番号",ORG:"会社・組織",ADDRESS:"住所",PROJECT:"案件",OTHER:"その他",URL:"URL認証情報",POSTAL:"郵便番号",MYNUMBER:"12桁の番号(マイナンバー等)",CARD:"16桁の番号(カード等)",ACCOUNT:"口座番号",DATE:"日付(生年月日など)"};
 const surnames="田中 佐藤 鈴木 高橋 伊藤 渡辺 山本 中村 小林 加藤 吉田 山田 佐々木 山口 松本 井上 木村 林 清水 斎藤 斉藤 森 池田 橋本 阿部 石川 山崎 中島 前田 藤田 小川 後藤 岡田 長谷川 村上 近藤 石井 坂本 遠藤 青木 藤井 西村 福田 太田 三浦 藤原 岡本 松田 中川 中野 原田 小野 田村 竹内 金子 和田 中山 石田 上田 森田 柴田 酒井 工藤 横山 宮崎 宮本 内田 高木 安藤 谷口 大野 丸山 今井 河野 藤本 村田 武田 上野 杉山 増田 小島 千葉 菅原 久保 松井 岩崎 桜井 野口 松尾 菊地 野村 新井 渡部 平野 大塚 小山 高田 星野 大西 河合 岩田 浜田 辻 飯田 吉川 本田 川口 中田 久保田 橘".split(" ");
 let candidates=[],customTerms=[],mappings=[],scannedText="";
 function add(type,value,start,end,source="自動検出"){if(value&&end>start&&!candidates.some(c=>c.type===type&&c.value===value&&c.start===start&&c.end===end))candidates.push({type,value,start,end,source,selected:true});}
 function regexFind(type,re,text){re.lastIndex=0;let m;while((m=re.exec(text))!==null){add(type,m[0],m.index,m.index+m[0].length);if(!m[0].length)re.lastIndex++;}}
+function ctxFind(type,re,text){re.lastIndex=0;let m;while((m=re.exec(text))!==null){const v=m[1],st=m.index+m[0].lastIndexOf(v);add(type,v,st,st+v.length);}}
 function detect(text){
  candidates=[];
  regexFind("EMAIL",/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/gi,text);
+ regexFind("EMAIL",/[A-Za-z0-9._%+-]+[@＠][A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g,text);
+ // 電話番号はハイフンなし・全角も拾う。見逃し防止を優先し、誤検出は利用者がチェックを外す。
+ regexFind("PHONE",/(?<![0-9０-９])0[0-9]{9,10}(?![0-9０-９])/g,text);
+ regexFind("PHONE",/(?<![0-9０-９])[0０][0-9０-９]{1,3}[-－ー‐][0-9０-９]{2,4}[-－ー‐][0-9０-９]{3,4}(?![0-9０-９])/g,text);
  regexFind("PHONE",/(?:\+81[-ー ]?|0)\d{1,4}(?:[-ー ]\d{2,4}[-ー ]\d{3,4}|\s*\(\d{2,4}\)\s*\d{3,4})/g,text);
  // 郵便番号は文脈（「郵便番号」「〒」）がある場合に検出し、電話番号の一部や商品コードを誤検出しにくくする。
  const postalRe=/(?:郵便番号(?:は|：|:)?\s*|〒\s*)(\d{3}-\d{4})(?![\d-])/g;let pm;
  while((pm=postalRe.exec(text))!==null){const value=pm[1],start=pm.index+pm[0].indexOf(value);add("POSTAL",value,start,start+value.length);}
 
  regexFind("URL",/https?:\/\/[^\s/@:]+:[^\s/@]+@[^\s]+/gi,text);
- const nonPersonSuffixes=["理論","製品","方式","法則","モデル","効果","問題","研究","技術","機能","資料","企画","計画","制度","方法","基準","構造","市場"];
+ regexFind("CARD",/(?<![0-9０-９])[0-9０-９]{4}(?:[ \-－]?[0-9０-９]{4}){3}(?![0-9０-９])/g,text);
+ regexFind("MYNUMBER",/(?<![0-9０-９]|[0-9０-９][ \-－])[0-9０-９]{4}[ \-－]?[0-9０-９]{4}[ \-－]?[0-9０-９]{4}(?![0-9０-９]|[ \-－][0-9０-９])/g,text);
+ ctxFind("ACCOUNT",/(?:口座番号|口座|店番号?|普通|当座)(?:は|：|:)?\s*([0-9０-９]{4,8})(?![0-9０-９])/g,text);
+ regexFind("DATE",/(?:(?:昭和|平成|令和|大正)\s*)?[0-9０-９]{1,4}年\s*[0-9０-９]{1,2}月\s*[0-9０-９]{1,2}日/g,text);
+ regexFind("DATE",/(?<![0-9０-９])(?:19|20)[0-9]{2}[\/.\-][0-9]{1,2}[\/.\-][0-9]{1,2}(?![0-9])/g,text);
+ regexFind("PERSON",/(?<![A-Za-z])[A-Z][a-z]{1,15} [A-Z][a-z]{1,15}(?: [A-Z][a-z]{1,15})?(?![A-Za-z])/g,text);
+ regexFind("ORG",/(?<![一-龯々ァ-ヶ])[一-龯々ァ-ヶ]{2,10}(?:製薬|證券|証券|商事|工業|電機|建設|食品|製作所|自動車|不動産|保険|航空|鉄道|出版|通信)/g,text);
+ regexFind("ADDRESS",/(?<![一-龯々])[一-龯々]{1,4}[市区町村][一-龯々ぁ-んァ-ヶ]{0,12}?[0-9０-９]+(?:丁目|番地|番|号|[-－ー][0-9０-９]+|[0-9０-９])*/g,text);
+ const nonPersonSuffixes=["理論","製品","方式","法則","モデル","効果","問題","研究","技術","機能","資料","企画","計画","制度","方法","基準","構造","市場","製薬","證券","証券","商事","工業","電機","建設","食品","自動車","不動産","保険","航空","鉄道","出版","通信","銀行","大学","病院","会社"];
  const sp=new RegExp("(?:^|[^一-龯々])("+surnames.join("|")+")[一-龯々]{1,3}","g");let m;
- while((m=sp.exec(text))!==null){const off=m[0].indexOf(m[1]),start=m.index+off,val=m[0].slice(off);if(val.length>=3&&val.length<=5&&!nonPersonSuffixes.some(suffix=>val.endsWith(suffix)))add("PERSON",val,start,start+val.length);if(!m[0].length)sp.lastIndex++;}
+ while((m=sp.exec(text))!==null){const off=m[0].indexOf(m[1]),start=m.index+off;let val=m[0].slice(off).replace(/(部長|課長|社長|係長|主任|取締役|専務|常務|先生|教授|代表|担当|店長|所長|院長|会長|理事長|次長|局長)$/,"");if(val.length>=2&&val.length<=5&&!nonPersonSuffixes.some(suffix=>val.endsWith(suffix)))add("PERSON",val,start,start+val.length);if(!m[0].length)sp.lastIndex++;}
  // 短い氏名やひらがなの名は誤検出しやすいため、氏名を示す明示的な文脈がある場合に限って補助検出する。
  const contextNameRe=new RegExp("(?:担当者(?:は|：|:)|氏名(?:は|：|:)|名前(?:は|：|:)|本人(?:は|：|:)|社員(?:は|：|:)|宛名(?:は|：|:))\\s*("+surnames.join("|")+")([一-龯々ぁ-ん]{1,5}?)(?=です|でした|さん|様|君|氏|に|と|、|。|$|\\s)","g");
  while((m=contextNameRe.exec(text))!==null){const value=m[1]+m[2],start=m.index+m[0].lastIndexOf(value);if(value.length>=2&&value.length<=7)add("PERSON",value,start,start+value.length);if(!m[0].length)contextNameRe.lastIndex++;}
@@ -86,14 +99,22 @@ function detect(text){
  // メールの宛先などで「山田、佐藤、私宛」のように敬称なしで列挙された姓も検出する。
  const listedSurnameRe=new RegExp("(?<![一-龯々])("+surnames.join("|")+")(?=(?:、|，|,|・|宛に|宛先|にメール|へメール|に説明|に確認))(?![一-龯々])","g");
  while((m=listedSurnameRe.exec(text))!==null){add("PERSON",m[1],m.index,m.index+m[1].length);if(!m[0].length)listedSurnameRe.lastIndex++;}
+ // 「高橋と申します」「森です」など、自己紹介の文脈にある姓だけの表記。
+ const introRe=new RegExp("(?<![一-龯々])("+surnames.join("|")+")(?=(?:と申します|と言います|といいます|です|でございます|から|より|宛))","g");
+ while((m=introRe.exec(text))!==null){add("PERSON",m[1],m.index,m.index+m[1].length);}
+ // 2文字以上の姓は、単独で出ても候補にする(誤検出は利用者がチェックを外す)。
+ const longSurnames=surnames.filter(x=>x.length>=2);
+ const anySurnameRe=new RegExp("(?<![一-龯々])("+longSurnames.join("|")+")(?![一-龯々])","g");
+ while((m=anySurnameRe.exec(text))!==null){add("PERSON",m[1],m.index,m.index+m[1].length);}
  // 会社名は接頭辞・接尾辞の境界を意識し、文の前後を巻き込みにくいパターンにする。
  regexFind("ORG",/(?<![一-龯々ァ-ヶA-Za-z0-9・ー])[一-龯々ァ-ヶA-Za-z0-9・ー]{2,16}(?:株式会社|有限会社|合同会社|大学|病院|銀行)/g,text);
- regexFind("ORG",/(?:株式会社|有限会社|合同会社)(?!に|は|が|を|と|で|の)[一-龯々ぁ-んァ-ヶA-Za-z0-9・ー]{2,16}?(?=です|でした|は|が|を|に|と|、|。|$|\s)/g,text);
+ regexFind("ORG",/(?:株式会社|有限会社|合同会社)(?!に|は|が|を|と|で|の)[一-龯々ぁ-んァ-ヶA-Za-z0-9・ー]{2,16}?(?=です|でした|は|が|を|に|と|の|、|。|$|\s)/g,text);
  regexFind("ORG",/(?:みずほ|ゆうちょ|りそな|楽天|あおぞら|住信SBI|三菱UFJ|三井住友|PayPay)銀行/g,text);
  // 住所末尾は漢字・カタカナ・数字・丁目番地等を中心にし、「に住んでいます」などの文を巻き込まない。
  regexFind("ADDRESS",/(?:北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)[^。\n、，]{0,25}?(?:市|区|町|村)[一-龯々ぁ-んァ-ヶー0-9０-９\-－丁目番地号]{0,20}?(?=です|でした|に住んで|にある|は|、|。|$|\s)/g,text);
  for(const t of customTerms){let from=0,idx;while((idx=text.indexOf(t.value,from))!==-1){add(t.type,t.value,idx,idx+t.value.length,"手動登録");from=idx+t.value.length;}}
  // URL内の認証情報に含まれる「password@example.test」等を独立したメール候補として重複表示しない。
+ candidates=candidates.filter(c=>!candidates.some(o=>o!==c&&o.type===c.type&&o.start<=c.start&&o.end>=c.end&&(o.end-o.start)>(c.end-c.start)));
  candidates=candidates.filter(c=>!(c.type==="EMAIL"&&candidates.some(u=>u.type==="URL"&&c.start>=u.start&&c.end<=u.end)));
  candidates.sort((a,b)=>a.start-b.start||(b.end-b.start)-(a.end-a.start)||a.type.localeCompare(b.type));candidates.forEach((c,i)=>c.id=i);scannedText=text;renderCandidates();
 }
